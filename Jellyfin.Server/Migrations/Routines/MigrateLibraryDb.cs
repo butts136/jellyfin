@@ -9,12 +9,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using Emby.Server.Implementations.Data;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
 using Jellyfin.Server.Implementations.Item;
+using Jellyfin.Server.ServerSetupApp;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
@@ -29,11 +29,13 @@ namespace Jellyfin.Server.Migrations.Routines;
 /// <summary>
 /// The migration routine for migrating the userdata database to EF Core.
 /// </summary>
+[JellyfinMigration("2025-04-20T20:00:00", nameof(MigrateLibraryDb))]
+[JellyfinMigrationBackup(JellyfinDb = true, LegacyLibraryDb = true)]
 internal class MigrateLibraryDb : IDatabaseMigrationRoutine
 {
     private const string DbFilename = "library.db";
 
-    private readonly ILogger<MigrateLibraryDb> _logger;
+    private readonly IStartupLogger _logger;
     private readonly IServerApplicationPaths _paths;
     private readonly IJellyfinDatabaseProvider _jellyfinDatabaseProvider;
     private readonly IDbContextFactory<JellyfinDbContext> _provider;
@@ -41,30 +43,21 @@ internal class MigrateLibraryDb : IDatabaseMigrationRoutine
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrateLibraryDb"/> class.
     /// </summary>
-    /// <param name="logger">The logger.</param>
+    /// <param name="startupLogger">The startup logger for Startup UI intigration.</param>
     /// <param name="provider">The database provider.</param>
     /// <param name="paths">The server application paths.</param>
     /// <param name="jellyfinDatabaseProvider">The database provider for special access.</param>
     public MigrateLibraryDb(
-        ILogger<MigrateLibraryDb> logger,
+        IStartupLogger<MigrateLibraryDb> startupLogger,
         IDbContextFactory<JellyfinDbContext> provider,
         IServerApplicationPaths paths,
         IJellyfinDatabaseProvider jellyfinDatabaseProvider)
     {
-        _logger = logger;
+        _logger = startupLogger;
         _provider = provider;
         _paths = paths;
         _jellyfinDatabaseProvider = jellyfinDatabaseProvider;
     }
-
-    /// <inheritdoc/>
-    public Guid Id => Guid.Parse("36445464-849f-429f-9ad0-bb130efa0664");
-
-    /// <inheritdoc/>
-    public string Name => "MigrateLibraryDbData";
-
-    /// <inheritdoc/>
-    public bool PerformOnNewInstall => false; // TODO Change back after testing
 
     /// <inheritdoc/>
     public void Perform()
@@ -73,6 +66,12 @@ internal class MigrateLibraryDb : IDatabaseMigrationRoutine
 
         var dataPath = _paths.DataPath;
         var libraryDbPath = Path.Combine(dataPath, DbFilename);
+        if (!File.Exists(libraryDbPath))
+        {
+            _logger.LogError("Cannot migrate {LibraryDb} as it does not exist..", libraryDbPath);
+            return;
+        }
+
         using var connection = new SqliteConnection($"Filename={libraryDbPath};Mode=ReadOnly");
 
         var fullOperationTimer = new Stopwatch();
@@ -395,8 +394,6 @@ internal class MigrateLibraryDb : IDatabaseMigrationRoutine
 
         _logger.LogInformation("Move {0} to {1}.", libraryDbPath, libraryDbPath + ".old");
         File.Move(libraryDbPath, libraryDbPath + ".old", true);
-
-        _jellyfinDatabaseProvider.RunScheduledOptimisation(CancellationToken.None).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     private DatabaseMigrationStep GetPreparedDbContext(string operationName)
