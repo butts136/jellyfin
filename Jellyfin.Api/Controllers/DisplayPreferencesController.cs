@@ -91,6 +91,14 @@ public class DisplayPreferencesController : BaseJellyfinApiController
 
         // Load all custom display preferences
         var customDisplayPreferences = _displayPreferencesManager.ListCustomItemDisplayPreferences(displayPreferences.UserId, itemId, displayPreferences.Client);
+
+        // Ensure a default value for the library home display mode
+        if (!customDisplayPreferences.TryGetValue("libraryHomeDisplayMode", out var mode)
+            || !Enum.TryParse<LibraryHomeDisplayMode>(mode, true, out _))
+        {
+            customDisplayPreferences["libraryHomeDisplayMode"] = LibraryHomeDisplayMode.DateAdded.ToString().ToLowerInvariant();
+        }
+
         foreach (var (key, value) in customDisplayPreferences)
         {
             dto.CustomPrefs.TryAdd(key, value);
@@ -199,6 +207,12 @@ public class DisplayPreferencesController : BaseJellyfinApiController
                 _logger.LogError("Invalid ViewType: {LandingScreenOption}", displayPreferences.CustomPrefs[key]);
                 displayPreferences.CustomPrefs.Remove(key);
             }
+        }
+
+        if (displayPreferences.CustomPrefs.TryGetValue("libraryHomeDisplayMode", out var newMode)
+            && !Enum.TryParse<LibraryHomeDisplayMode>(newMode, true, out _))
+        {
+            displayPreferences.CustomPrefs.Remove("libraryHomeDisplayMode");
         }
 
         var itemPrefs = _displayPreferencesManager.GetItemDisplayPreferences(existingDisplayPreferences.UserId, itemId, existingDisplayPreferences.Client);
