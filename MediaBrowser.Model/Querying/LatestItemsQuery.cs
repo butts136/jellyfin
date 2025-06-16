@@ -13,6 +13,7 @@ namespace MediaBrowser.Model.Querying
         public LatestItemsQuery()
         {
             EnableImageTypes = Array.Empty<ImageType>();
+            SortBy = ItemSortBy.DateCreated;
         }
 
         /// <summary>
@@ -81,5 +82,11 @@ namespace MediaBrowser.Model.Querying
         /// </summary>
         /// <value>The enable image types.</value>
         public ImageType[] EnableImageTypes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the field used to sort the latest items.
+        /// Defaults to <see cref="ItemSortBy.DateCreated"/>.
+        /// </summary>
+        public ItemSortBy SortBy { get; set; }
     }
 }
